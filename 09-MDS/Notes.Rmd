@@ -1,0 +1,35 @@
+---
+title: MDS Notes
+---
+
+Notes from Conway & White Chapter 9 on multi-dimensional scaling.
+
+We start out with a very simple matrix:
+
+```{r results = 'asis'}
+set.seed(851982) # To make sure results are consistent
+ex.matrix <- matrix(sample(c(-1, 0, 1), 24, replace = TRUE),
+                    nrow = 4,
+                    ncol = 6)
+row.names(ex.matrix) <- c('A', 'B', 'C', 'D')
+colnames(ex.matrix) <- c('P1', 'P2', 'P3', 'P4', 'P5', 'P6')
+
+pander::pander(ex.matrix)
+```
+
+```{r results = 'asis'}
+ex.mult <- ex.matrix %*% t(ex.matrix)
+pander::pander(ex.mult)
+```
+
+```{r results = 'asis'}
+ex.dist <- dist(ex.mult)
+pander::pander(as.matrix(ex.dist))
+```
+
+```{r}
+ex.mds <- cmdscale(ex.dist)
+plot(ex.mds, type = 'n')
+text(ex.mds, c('A', 'B', 'C', 'D'))
+```
+
