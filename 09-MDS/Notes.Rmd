@@ -17,19 +17,258 @@ colnames(ex.matrix) <- c('P1', 'P2', 'P3', 'P4', 'P5', 'P6')
 pander::pander(ex.matrix)
 ```
 
+We then multiply this matrix by its transpose. Why? To measure the distance between the items. The matrix multiplication is sort of a correlation measure. Important note: in this matrix, 0 implies no observation. So, the "variance" of an item measures the number of observations.
+
 ```{r results = 'asis'}
 ex.mult <- ex.matrix %*% t(ex.matrix)
 pander::pander(ex.mult)
 ```
+
+We see that "B" has the greatest number of observations at four. A has only two.
 
 ```{r results = 'asis'}
 ex.dist <- dist(ex.mult)
 pander::pander(as.matrix(ex.dist))
 ```
 
+Note that the distance beetween a point and itself is zero. Question: given a distance matrix, can we decompose it into observations?
+
+Given the distance matrix, we now render that distance into two-dimensions. Conway & White make the clever example of trying to render four equidistant points in two dimensions. It can't be done.
+
 ```{r}
 ex.mds <- cmdscale(ex.dist)
 plot(ex.mds, type = 'n')
 text(ex.mds, c('A', 'B', 'C', 'D'))
+```
+
+Groovy. A and D are close together. B and C are far apart from everything but themselves. Let's try that again, but with actual names and more complete data.
+
+```{r results = 'asis'}
+films <- c("The Godfather", "Mean Streets", "Jurassic Park", "The Avengers", "My Best Friends Wedding", "Despicable Me")
+Me <- c(1, 1, -1, 1, -1, 1)
+Inessa <- c(1, 1, 1, 1, 1, 1)
+Joe <- c(1, 1, -1, -1, -1, -1)
+Jane <- c(1, -1, 1, 1, -1, 1)
+df <- rbind(Me, Inessa, Joe, Jane)
+colnames(df) <- films
+
+pander::pander(df)
+```
+
+```{r}
+matCovar <- df %*% t(df)
+pander::pander(matCovar)
+```
+
+```{r }
+matDist <- dist(matCovar)
+pander::pander(as.matrix(matDist))
+```
+
+```{r}
+mdsFilms <- cmdscale(matDist)
+plot(mdsFilms, type = 'n')
+text(mdsFilms, rownames(df))
+```
+
+One more time, but with some beer recipes taken from Charlie Papazian's Complete Joy of Homebrewing.
+
+```{r}
+dfBeer <- data.frame(BeerName = c("Sparrow Hawk", "Doctor Bock", "Toad Spit", "Potlach", "Palace Bitter")
+                     , BeerStyle = c("Porter", "Starkbier", "Stout", "Starkbier", "Pale Ale")
+                     , PageNumber = c(201, 202, 206, 233, 170)
+                     , Yeast = c("Ale", "Ale", "Ale", "Lager", "Ale")
+                     , Color = c(50, 28, 40, 28, 13)
+                     , IBU = c(38, 26, 40, 33, 26)
+                     , OG = c(1.058, 1.066, 1.060, 1.076, 1.040)
+                     , FG = c(1.014, 1.014, 1.016, 1.018, 1.008))
+```
+
+```{r}
+beerMat <- as.matrix(dfBeer[, c("Color", "IBU", "OG")])
+row.names(beerMat) <- dfBeer$BeerName
+
+beerMat <- beerMat %*% t(beerMat)
+beerDist <- dist(beerMat)
+
+beerMds <- cmdscale(beerDist)
+row.names(beerMds) <- dfBeer$BeerStyle
+```
+
+```{r }
+plot(beerMds)
+plot(beerMds, type = "n")
+text(beerMds, row.names(beerMds))
+```
+
+```{r}
+data.dir <- file.path("09-MDS", "data", "roll_call")
+data.files <- list.files(data.dir)
+
+data.files
+
+# Add all roll call vote data frames to a single list
+rollcall.data <- lapply(data.files,
+                        function(f)
+                        {
+                          read.dta(file.path(data.dir, f), convert.factors = FALSE)
+                        })
+
+dim(rollcall.data[[1]])
+
+head(rollcall.data[[1]])
+```
+
+```{r}
+rollcall.simplified <- function(df)
+{
+  no.pres <- subset(df, state < 99)
+  
+  for(i in 10:ncol(no.pres))
+  {
+    no.pres[,i] <- ifelse(no.pres[,i] > 6, 0, no.pres[,i])
+    no.pres[,i] <- ifelse(no.pres[,i] > 0 & no.pres[,i] < 4, 1, no.pres[,i])
+    no.pres[,i] <- ifelse(no.pres[,i] > 1, -1, no.pres[,i])
+  }
+  
+  return(as.matrix(no.pres[,10:ncol(no.pres)]))
+}
+
+rollcall.simple <- lapply(rollcall.data, rollcall.simplified)
+```
+
+```{r}
+rollcall.dist <- lapply(rollcall.simple, function(m) dist(m %*% t(m)))
+
+rollcall.mds <- lapply(rollcall.dist,
+                       function(d) as.data.frame((cmdscale(d, k = 2)) * -1))
+
+
+congresses <- 101:111
+
+for(i in 1:length(rollcall.mds))
+{
+  names(rollcall.mds[[i]]) <- c("x", "y")
+  
+  congress <- subset(rollcall.data[[i]], state < 99)
+  
+  congress.names <- sapply(as.character(congress$name),
+                           function(n) strsplit(n, "[, ]")[[1]][1])
+  
+  rollcall.mds[[i]] <- transform(rollcall.mds[[i]],
+                                 name = congress.names,
+                                 party = as.factor(congress$party),
+                                 congress = congresses[i])
+}
+
+head(rollcall.mds[[1]])
+cong.110 <- rollcall.mds[[9]]
+
+base.110 <- ggplot(cong.110, aes(x = x, y = y)) +
+  scale_size(range = c(2,2), guide = 'none') +
+  scale_alpha(guide = 'none') +
+  theme_bw() +
+  theme(axis.ticks = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        panel.grid.major = element_blank()) +
+  ggtitle("Roll Call Vote MDS Clustering for 110th U.S. Senate") +
+  xlab("") +
+  ylab("") +
+  scale_shape(name = "Party", breaks = c("100", "200", "328"),
+              labels = c("Dem.", "Rep.", "Ind."), solid = FALSE) +
+  scale_color_manual(name = "Party", values = c("100" = "blue", "200" = "red", "328"="grey"),
+                     breaks = c("100", "200", "328"),
+                     labels = c("Dem.", "Rep.", "Ind."))
+
+base.110 + geom_text(aes(color = party, label = cong.110$name, size = 2))
+```
+
+```{r }
+all.mds <- do.call(rbind, rollcall.mds)
+
+all.plot <- ggplot(all.mds, aes(x = x, y = y)) +
+  geom_point(aes(shape = party, size = 2, color = party)) +
+  scale_size(range = c(2, 2), guide = 'none') +
+  scale_alpha(guide = 'none') +
+  theme_bw() +
+  theme(axis.ticks = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        panel.grid.major = element_blank()) +
+  scale_color_manual(name = "Party", values = c("100" = "blue", "200" = "red", "328"="grey"),
+                     breaks = c("100", "200", "328"),
+                     labels = c("Dem.", "Rep.", "Ind.")) + 
+  ggtitle("Roll Call Vote MDS Clustering for U.S. Senate (101st - 111th Congress)") +
+  xlab("") +
+  ylab("") +
+  scale_shape(name = "Party", breaks = c("100", "200", "328"), labels = c("Dem.", "Rep.", "Ind."), solid = FALSE) +
+  facet_wrap(~ congress)
+
+all.plot
+```
+
+```{r }
+# This is the code omitted from the chapter.  This is used to create shnazy plots of everything!
+for(i in 1:length(rollcall.mds))
+{
+  mds <- rollcall.mds[[i]]
+  congress <- congresses[i]
+  plot.title <- paste("Roll Call Vote MDS Clustering for ",
+                      congress,
+                      " U.S. Senate",
+                      sep = "")
+  
+  # Build base plot
+  mds.plot <- ggplot(mds, aes(x = x, y = y)) +
+    scale_size(range = c(2, 2), guide = 'none') +
+    scale_alpha(guide = 'none') +
+    theme_bw() +
+    theme(axis.ticks = element_blank(), 
+          axis.text.x = element_blank(),
+          axis.text.y = element_blank(),
+          panel.grid.major = element_blank()) +
+    ggtitle(plot.title) +
+    xlab("") +
+    ylab("")
+  
+  # Build up point and text plots separately
+  mds.point <- mds.plot + geom_point(aes(shape = party,
+                                         alpha = 0.75,
+                                         size = 2))
+  mds.text <- mds.plot + geom_text(aes(color = party,
+                                       alpha = 0.75,
+                                       label = mds$name,
+                                       size = 2))
+  
+  # Fix labels, shapes and colors
+  if(length(levels(mds$party)) > 2)
+  {
+    mds.point <- mds.point + scale_shape(name = "Party",
+                                         breaks = c("100", "200", "328"),
+                                         labels = c("Dem.", "Rep.", "Ind."),
+                                         solid = FALSE)
+    mds.text <- mds.text + scale_color_manual(name = "Party",
+                                              values = c("100" = "black",
+                                                         "200" = "dimgray",
+                                                         "328" = "gray"),
+                                              breaks = c("100", "200", "328"),
+                                              labels = c("Dem.", "Rep.", "Ind."))
+  }
+  else
+  {
+    mds.point <- mds.point + scale_shape(name = "Party",
+                                         breaks = c("100", "200"),
+                                         labels = c("Dem.", "Rep."),
+                                         solid = FALSE)
+    mds.text <- mds.text + scale_color_manual(name = "Party",
+                                              values = c("100" = "black",
+                                                         "200" = "dimgray"),
+                                              breaks = c("100", "200"),
+                                              labels = c("Dem.", "Rep."))
+  }
+  
+}
+
 ```
 
