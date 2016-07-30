@@ -71,6 +71,19 @@ plot(mdsFilms, type = 'n')
 text(mdsFilms, rownames(df))
 ```
 
+And now again, but let's check the distances between the films.
+
+```{r}
+dfFilm <- t(df)
+matCovar <- dfFilm %*% df
+matDist <- dist(matCovar)
+mdsFilms <- cmdscale(matDist)
+plot(mdsFilms, type = 'n')
+text(mdsFilms, rownames(dfFilm))
+```
+
+Neat! The mafia films are poles apart from the other stuff. The Avengers and Despicable Me are right on top of one another. Not what I would expect, but consistent with this data.
+
 One more time, but with some beer recipes taken from Charlie Papazian's Complete Joy of Homebrewing.
 
 ```{r}
